@@ -1,8 +1,12 @@
-from ..patch_match import PyramidPatchMatcher
-import functools, os
+import functools
+import os
+
+import numpy
 import numpy as np
 from PIL import Image
 from tqdm import tqdm
+
+from ..patch_match import PyramidPatchMatcher
 
 
 class TableManager:
@@ -12,15 +16,15 @@ class TableManager:
     def task_list(self, n):
         tasks = []
         max_level = 1
-        while (1<<max_level)<=n:
+        while (1 << max_level) <= n:
             max_level += 1
         for i in range(n):
             j = i
             for level in range(max_level):
-                if i&(1<<level):
+                if i & (1 << level):
                     continue
-                j |= 1<<level
-                if j>=n:
+                j |= 1 << level
+                if j >= n:
                     break
                 meta_data = {
                     "source": i,
@@ -28,60 +32,79 @@ class TableManager:
                     "level": level + 1
                 }
                 tasks.append(meta_data)
-        tasks.sort(key=functools.cmp_to_key(lambda u, v: u["level"]-v["level"]))
+        tasks.sort(key=functools.cmp_to_key(lambda u, v: u["level"] - v["level"]))
         return tasks
-    
-    def build_remapping_table(self, frames_guide, frames_style, patch_match_engine, batch_size, desc=""):
+
+    def build_remapping_table(self, cache_folder, frames_guide, frames_style, patch_match_engine, batch_size, desc=""):
         n = len(frames_guide)
         tasks = self.task_list(n)
-        remapping_table = [[(frames_style[i], 1)] for i in range(n)]
+        remapping_table = []
+        for i in range(n):
+            npy_path = os.path.join(cache_folder, f"{i}_0.npy")
+            image_data = np.array(Image.open(frames_style[i].tolist()))
+            numpy.save(npy_path, image_data)
+            remapping_table.append([(npy_path, 1)])
+        # remapping_table = [[(np.array(Image.open(frames_style[i].tolist())), 1)] for i in range(n)]
         for batch_id in tqdm(range(0, len(tasks), batch_size), desc=desc):
-            tasks_batch = tasks[batch_id: min(batch_id+batch_size, len(tasks))]
-            source_guide = np.stack([frames_guide[task["source"]] for task in tasks_batch])
-            target_guide = np.stack([frames_guide[task["target"]] for task in tasks_batch])
-            source_style = np.stack([frames_style[task["source"]] for task in tasks_batch])
+            tasks_batch = tasks[batch_id: min(batch_id + batch_size, len(tasks))]
+            source_guide = np.stack([np.array(Image.open(frames_guide[task["source"]].tolist())) for task in tasks_batch])
+            target_guide = np.stack([np.array(Image.open(frames_guide[task["target"]].tolist())) for task in tasks_batch])
+            source_style = np.stack([np.array(Image.open(frames_style[task["source"]].tolist())) for task in tasks_batch])
             _, target_style = patch_match_engine.estimate_nnf(source_guide, target_guide, source_style)
             for task, result in zip(tasks_batch, target_style):
                 target, level = task["target"], task["level"]
                 if len(remapping_table[target])==level:
-                    remapping_table[target].append((result, 1))
+                    npy_path = os.path.join(cache_folder, f"{target}_{level}.npy")
+                    numpy.save(npy_path, result)
+                    remapping_table[target].append((npy_path, 1))
                 else:
                     frame, weight = remapping_table[target][level]
+                    if isinstance(frame, str):
+                        frame = numpy.load(frame)
+                    frame = frame * (weight / (weight + 1)) + result / (weight + 1)
+                    npy_path = os.path.join(cache_folder, f"{target}_{level}.npy")
+                    numpy.save(npy_path, frame)
                     remapping_table[target][level] = (
-                        frame * (weight / (weight + 1)) + result / (weight + 1),
+                        npy_path,
                         weight + 1
                     )
         return remapping_table
 
-    def remapping_table_to_blending_table(self, table):
+    def remapping_table_to_blending_table(self, cache_folder, table):
         for i in range(len(table)):
             for j in range(1, len(table[i])):
                 frame_1, weight_1 = table[i][j-1]
                 frame_2, weight_2 = table[i][j]
+                if isinstance(frame_1, str):
+                    frame_1 = numpy.load(frame_1)
+                if isinstance(frame_2, str):
+                    frame_2 = numpy.load(frame_2)
                 frame = (frame_1 + frame_2) / 2
                 weight = weight_1 + weight_2
-                table[i][j] = (frame, weight)
+                npy_path = os.path.join(cache_folder, f"{i}_{j}.npy")
+                numpy.save(npy_path, frame)
+                table[i][j] = (npy_path, weight)
         return table
 
     def tree_query(self, leftbound, rightbound):
         node_list = []
         node_index = rightbound
-        while node_index>=leftbound:
+        while node_index >= leftbound:
             node_level = 0
-            while (1<<node_level)&node_index and node_index-(1<<node_level+1)+1>=leftbound:
+            while (1 << node_level) & node_index and node_index - (1 << node_level + 1) + 1 >= leftbound:
                 node_level += 1
             node_list.append((node_index, node_level))
-            node_index -= 1<<node_level
+            node_index -= 1 << node_level
         return node_list
 
-    def process_window_sum(self, frames_guide, blending_table, patch_match_engine, window_size, batch_size, desc=""):
+    def process_window_sum(self, cache_folder, frames_guide, blending_table, patch_match_engine, window_size, batch_size, desc=""):
         n = len(blending_table)
         tasks = []
         frames_result = []
         for target in range(n):
-            node_list = self.tree_query(max(target-window_size, 0), target)
+            node_list = self.tree_query(max(target - window_size, 0), target)
             for source, level in node_list:
-                if source!=target:
+                if source != target:
                     meta_data = {
                         "source": source,
                         "target": target,
@@ -91,18 +114,23 @@ class TableManager:
                 else:
                     frames_result.append(blending_table[target][level])
         for batch_id in tqdm(range(0, len(tasks), batch_size), desc=desc):
-            tasks_batch = tasks[batch_id: min(batch_id+batch_size, len(tasks))]
-            source_guide = np.stack([frames_guide[task["source"]] for task in tasks_batch])
-            target_guide = np.stack([frames_guide[task["target"]] for task in tasks_batch])
-            source_style = np.stack([blending_table[task["source"]][task["level"]][0] for task in tasks_batch])
+            tasks_batch = tasks[batch_id: min(batch_id + batch_size, len(tasks))]
+            source_guide = np.stack([np.array(Image.open(frames_guide[task["source"]].tolist())) for task in tasks_batch])
+            target_guide = np.stack([np.array(Image.open(frames_guide[task["target"]].tolist())) for task in tasks_batch])
+            source_style = np.stack([numpy.load(blending_table[task["source"]][task["level"]][0]) for task in tasks_batch])
+            # source_style = np.stack([blending_table[task["source"]][task["level"]][0] for task in tasks_batch])
             _, target_style = patch_match_engine.estimate_nnf(source_guide, target_guide, source_style)
             for task, frame_2 in zip(tasks_batch, target_style):
                 source, target, level = task["source"], task["target"], task["level"]
                 frame_1, weight_1 = frames_result[target]
+                if isinstance(frame_1, str):
+                    frame_1 = numpy.load(frame_1)
                 weight_2 = blending_table[source][level][1]
                 weight = weight_1 + weight_2
                 frame = frame_1 * (weight_1 / weight) + frame_2 * (weight_2 / weight)
-                frames_result[target] = (frame, weight)
+                nyp_path = os.path.join(cache_folder, f"result_{target}.npy")
+                numpy.save(nyp_path, frame)
+                frames_result[target] = (nyp_path, weight)
         return frames_result
 
 

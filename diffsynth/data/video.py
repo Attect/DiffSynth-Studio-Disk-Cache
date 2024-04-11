@@ -1,5 +1,8 @@
-import imageio, os
+import shutil
+
+import imageio
 import numpy as np
+import os
 from PIL import Image
 from tqdm import tqdm
 
@@ -79,7 +82,8 @@ def crop_and_resize(image, height, width):
 
 
 class VideoData:
-    def __init__(self, video_file=None, image_folder=None, height=None, width=None, **kwargs):
+    def __init__(self, video_file=None, image_folder=None, image_cache_folder=None, height=None, width=None, **kwargs):
+        self.cache_folder = image_cache_folder
         if video_file is not None:
             self.data_type = "video"
             self.data = LowMemoryVideo(video_file, **kwargs)
@@ -118,12 +122,16 @@ class VideoData:
             return height, width
 
     def __getitem__(self, item):
+        path = f"{self.cache_folder}/{item}.png"
+        if os.path.exists(path):
+            return path
         frame = self.data.__getitem__(item)
         width, height = frame.size
         if self.height is not None and self.width is not None:
             if self.height != height or self.width != width:
                 frame = crop_and_resize(frame, self.height, self.width)
-        return frame
+        frame.save(path)
+        return path
 
     def __del__(self):
         pass
@@ -138,11 +146,13 @@ class VideoData:
 def save_video(frames, save_path, fps, quality=9):
     writer = imageio.get_writer(save_path, fps=fps, quality=quality)
     for frame in tqdm(frames, desc="Saving video"):
-        frame = np.array(frame)
-        writer.append_data(frame)
+        if isinstance(frame, str):
+            frame = np.array(Image.open(frame))
+        writer.append_data(np.array(frame))
     writer.close()
 
 def save_frames(frames, save_path):
     os.makedirs(save_path, exist_ok=True)
     for i, frame in enumerate(tqdm(frames, desc="Saving images")):
-        frame.save(os.path.join(save_path, f"{i}.png"))
+        shutil.copy(frame, os.path.join(save_path, f"{i}.png"))
+        # frame.save(os.path.join(save_path, f"{i}.png"))

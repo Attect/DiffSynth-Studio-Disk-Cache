@@ -1,0 +1,15 @@
+#Storch~=2.2.1+cu118
+cupy~=13.0.0
+transformers~=4.38.2
+controlnet-aux==0.0.7
+streamlit~=1.32.2
+streamlit-drawable-canvas
+imageio~=2.34.0
+imageio[ffmpeg]
+safetensors~=0.4.2
+einops~=0.7.0
+
+numpy~=1.26.4
+pillow~=10.2.0
+tqdm~=4.66.2
+opencv-python~=4.9.0.80

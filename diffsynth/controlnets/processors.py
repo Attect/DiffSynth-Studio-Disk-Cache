@@ -1,5 +1,8 @@
-from typing_extensions import Literal, TypeAlias
 import warnings
+
+from PIL import Image
+from typing_extensions import Literal, TypeAlias
+
 with warnings.catch_warnings():
     warnings.simplefilter("ignore")
     from controlnet_aux.processor import (
@@ -34,6 +37,7 @@ class Annotator:
         self.detect_resolution = detect_resolution
 
     def __call__(self, image):
+        image = Image.open(image)
         width, height = image.size
         if self.processor_id == "openpose":
             kwargs = {

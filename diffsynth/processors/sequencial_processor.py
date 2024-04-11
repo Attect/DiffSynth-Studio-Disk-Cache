@@ -6,10 +6,10 @@ class AutoVideoProcessor(VideoProcessor):
         pass
 
     @staticmethod
-    def from_model_manager(model_manager, processor_type, **kwargs):
+    def from_model_manager(model_manager, processor_type, output_folder, **kwargs):
         if processor_type == "FastBlend":
             from .FastBlend import FastBlendSmoother
-            return FastBlendSmoother.from_model_manager(model_manager, **kwargs)
+            return FastBlendSmoother.from_model_manager(model_manager, output_folder, **kwargs)
         elif processor_type == "Contrast":
             from .PILEditor import ContrastEditor
             return ContrastEditor.from_model_manager(model_manager, **kwargs)
@@ -28,13 +28,13 @@ class SequencialProcessor(VideoProcessor):
         self.processors = processors
 
     @staticmethod
-    def from_model_manager(model_manager, configs):
+    def from_model_manager(model_manager, output_folder, configs):
         processors = [
-            AutoVideoProcessor.from_model_manager(model_manager, config["processor_type"], **config["config"])
+            AutoVideoProcessor.from_model_manager(model_manager, config["processor_type"], output_folder, **config["config"])
             for config in configs
         ]
         return SequencialProcessor(processors)
-    
+
     def __call__(self, rendered_frames, **kwargs):
         for processor in self.processors:
             rendered_frames = processor(rendered_frames, **kwargs)

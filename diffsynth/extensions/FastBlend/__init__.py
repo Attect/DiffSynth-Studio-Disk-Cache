@@ -1,7 +1,8 @@
-from .runners.fast import TableManager, PyramidPatchMatcher
-from PIL import Image
-import numpy as np
 import cupy as cp
+import numpy as np
+from PIL import Image
+
+from .runners.fast import TableManager, PyramidPatchMatcher
 
 
 class FastBlendSmoother:
@@ -24,7 +25,7 @@ class FastBlendSmoother:
         return FastBlendSmoother()
 
     def run(self, frames_guide, frames_style, batch_size, window_size, ebsynth_config):
-        frames_guide = [np.array(frame) for frame in frames_guide]
+        frames_guide = [np.array(Image.open(frame)) for frame in frames_guide]
         frames_style = [np.array(frame) for frame in frames_style]
         table_manager = TableManager()
         patch_match_engine = PyramidPatchMatcher(

@@ -1,7 +1,7 @@
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np
 from PIL import Image
 
 
@@ -127,6 +127,8 @@ class RIFEInterpolater:
         return RIFEInterpolater(model_manager.RIFE, device=model_manager.device)
 
     def process_image(self, image):
+        if isinstance(image, str):
+            image = Image.open(image)
         width, height = image.size
         if width % 32 != 0 or height % 32 != 0:
             width = (width + 31) // 32
@@ -191,8 +193,11 @@ class RIFEInterpolater:
 
         # To images
         output_images = self.decode_images(processed_images)
-        if output_images[0].size != images[0].size:
-            output_images = [image.resize(images[0].size) for image in output_images]
+        first_image = images[0]
+        if isinstance(first_image, str):
+            first_image = Image.open(first_image)
+        if output_images[0].size != first_image.size:
+            output_images = [image.resize(first_image.size) for image in output_images]
         return output_images
 
 
