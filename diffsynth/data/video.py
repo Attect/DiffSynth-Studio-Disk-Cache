@@ -1,8 +1,8 @@
+import os
 import shutil
 
 import imageio
 import numpy as np
-import os
 from PIL import Image
 from tqdm import tqdm
 
@@ -10,7 +10,7 @@ from tqdm import tqdm
 class LowMemoryVideo:
     def __init__(self, file_name):
         self.reader = imageio.get_reader(file_name)
-    
+
     def __len__(self):
         return self.reader.count_frames()
 
@@ -25,10 +25,10 @@ def split_file_name(file_name):
     result = []
     number = -1
     for i in file_name:
-        if ord(i)>=ord("0") and ord(i)<=ord("9"):
+        if ord(i) >= ord("0") and ord(i) <= ord("9"):
             if number == -1:
                 number = 0
-            number = number*10 + ord(i) - ord("0")
+            number = number * 10 + ord(i) - ord("0")
         else:
             if number != -1:
                 result.append(number)
@@ -54,7 +54,7 @@ class LowMemoryImageFolder:
             self.file_list = search_for_images(folder)
         else:
             self.file_list = [os.path.join(folder, file_name) for file_name in file_list]
-    
+
     def __len__(self):
         return len(self.file_list)
 
@@ -71,19 +71,21 @@ def crop_and_resize(image, height, width):
     if image_height / image_width < height / width:
         croped_width = int(image_height / height * width)
         left = (image_width - croped_width) // 2
-        image = image[:, left: left+croped_width]
+        image = image[:, left: left + croped_width]
         image = Image.fromarray(image).resize((width, height))
     else:
         croped_height = int(image_width / width * height)
         left = (image_height - croped_height) // 2
-        image = image[left: left+croped_height, :]
+        image = image[left: left + croped_height, :]
         image = Image.fromarray(image).resize((width, height))
     return image
 
 
 class VideoData:
-    def __init__(self, video_file=None, image_folder=None, image_cache_folder=None, height=None, width=None, **kwargs):
+    def __init__(self, video_file=None, image_folder=None, image_cache_folder="image_cache", height=None, width=None, **kwargs):
         self.cache_folder = image_cache_folder
+        if not os.path.exists(self.cache_folder):
+            os.makedirs(self.cache_folder, exist_ok=True)
         if video_file is not None:
             self.data_type = "video"
             self.data = LowMemoryVideo(video_file, **kwargs)
@@ -150,6 +152,7 @@ def save_video(frames, save_path, fps, quality=9):
             frame = np.array(Image.open(frame))
         writer.append_data(np.array(frame))
     writer.close()
+
 
 def save_frames(frames, save_path):
     os.makedirs(save_path, exist_ok=True)
