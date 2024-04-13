@@ -1,9 +1,9 @@
+import json
+import os
 import shutil
 from typing import List
 
-import json
 import numpy as np
-import os
 import torch
 from PIL import Image
 from tqdm import tqdm
@@ -249,10 +249,17 @@ class SDVideoPipeline(torch.nn.Module):
                             torch.save(tensor_data, cache_full_path)
                         index += 1
             else:
-                controlnet_frames = torch.stack([
-                    self.controlnet.process_image(controlnet_frame).to(self.torch_dtype)
-                    for controlnet_frame in progress_bar_cmd(controlnet_frames)
-                ], dim=1)
+                index = 0
+                for controlnet_frame in progress_bar_cmd(controlnet_frames):
+                    cache_full_path = controlnet_cache_dir + f'/cache_p0_{index}.pt'
+                    if not os.path.exists(cache_full_path):
+                        tensor_data = self.controlnet.process_image(controlnet_frame).to(self.torch_dtype)
+                        torch.save(tensor_data, cache_full_path)
+                    index += 1
+                # controlnet_frames = torch.stack([
+                #     self.controlnet.process_image(controlnet_frame).to(self.torch_dtype)
+                #     for controlnet_frame in progress_bar_cmd(controlnet_frames)
+                # ], dim=1)
 
         # Denoise
         for progress_id, timestep in enumerate(progress_bar_cmd(self.scheduler.timesteps)):
