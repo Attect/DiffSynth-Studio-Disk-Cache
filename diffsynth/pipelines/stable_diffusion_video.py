@@ -237,6 +237,8 @@ class SDVideoPipeline(torch.nn.Module):
         prompt_emb_posi = prompt_emb_posi.repeat(num_frames, 1, 1)
         prompt_emb_nega = prompt_emb_nega.repeat(num_frames, 1, 1)
 
+        controlnet_processor_count = len(controlnet_frames) if controlnet_frames is not None else 0
+
         # Prepare ControlNets
         if controlnet_frames is not None:
             if isinstance(controlnet_frames[0], list):
@@ -249,6 +251,7 @@ class SDVideoPipeline(torch.nn.Module):
                             torch.save(tensor_data, cache_full_path)
                         index += 1
             else:
+                controlnet_processor_count = 1
                 index = 0
                 for controlnet_frame in progress_bar_cmd(controlnet_frames):
                     cache_full_path = controlnet_cache_dir + f'/cache_p0_{index}.pt'
@@ -269,7 +272,7 @@ class SDVideoPipeline(torch.nn.Module):
             noise_pred_posi = lets_dance_with_long_video(
                 self.unet, motion_modules=self.motion_modules, controlnet=self.controlnet,
                 sample=latents, timestep=timestep, encoder_hidden_states=prompt_emb_posi,
-                controlnet_processor_count=len(controlnet_frames) if controlnet_frames is not None else 0,
+                controlnet_processor_count=controlnet_processor_count,
                 controlnet_frames=controlnet_frames,
                 animatediff_batch_size=animatediff_batch_size, animatediff_stride=animatediff_stride,
                 unet_batch_size=unet_batch_size, controlnet_batch_size=controlnet_batch_size,
@@ -280,7 +283,7 @@ class SDVideoPipeline(torch.nn.Module):
             noise_pred_nega = lets_dance_with_long_video(
                 self.unet, motion_modules=self.motion_modules, controlnet=self.controlnet,
                 sample=latents, timestep=timestep, encoder_hidden_states=prompt_emb_nega,
-                controlnet_processor_count=len(controlnet_frames) if controlnet_frames is not None else 0,
+                controlnet_processor_count=controlnet_processor_count,
                 controlnet_frames=controlnet_frames,
                 animatediff_batch_size=animatediff_batch_size, animatediff_stride=animatediff_stride,
                 unet_batch_size=unet_batch_size, controlnet_batch_size=controlnet_batch_size,
