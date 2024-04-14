@@ -1,7 +1,7 @@
-from diffsynth import ModelManager, SDVideoPipeline, ControlNetConfigUnit, VideoData, save_video, save_frames
-from diffsynth.extensions.RIFE import RIFESmoother
 import torch
 
+from diffsynth import ModelManager, SDVideoPipeline, ControlNetConfigUnit, VideoData, save_video
+from diffsynth.extensions.RIFE import RIFESmoother
 
 # Download models
 # `models/stable_diffusion/flat2DAnimerge_v45Sharp.safetensors`: [link](https://civitai.com/api/download/models/266360?type=Model&format=SafeTensor&size=pruned&fp=fp16)
@@ -18,7 +18,7 @@ import torch
 model_manager = ModelManager(torch_dtype=torch.float16, device="cuda")
 model_manager.load_textual_inversions("models/textual_inversion")
 model_manager.load_models([
-    "models/stable_diffusion/flat2DAnimerge_v45Sharp.safetensors",
+    "models/stable_diffusion/aingdiffusion_v12.safetensors",
     "models/AnimateDiff/mm_sd_v15_v2.ckpt",
     "models/ControlNet/control_v11p_sd15_lineart.pth",
     "models/ControlNet/control_v11f1e_sd15_tile.pth",

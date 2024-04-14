@@ -1,5 +1,6 @@
-import torch
 import numpy as np
+import torch
+
 from .processors import Processor_id
 
 
@@ -33,6 +34,9 @@ class MultiControlNetManager:
             for image_ in processed_image
         ], dim=0)
         return processed_image
+
+    def unit_count(self):
+        return len(self.processors)
     
     def __call__(
         self,

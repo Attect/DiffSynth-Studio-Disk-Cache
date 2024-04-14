@@ -237,7 +237,7 @@ class SDVideoPipeline(torch.nn.Module):
         prompt_emb_posi = prompt_emb_posi.repeat(num_frames, 1, 1)
         prompt_emb_nega = prompt_emb_nega.repeat(num_frames, 1, 1)
 
-        controlnet_processor_count = len(controlnet_frames) if controlnet_frames is not None else 0
+        controlnet_processor_count = self.controlnet.unit_count() if controlnet_frames is not None else 0
 
         # Prepare ControlNets
         if controlnet_frames is not None:
