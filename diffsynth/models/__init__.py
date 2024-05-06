@@ -1,9 +1,12 @@
 import os
+
 import torch
 from safetensors import safe_open
 
 from .sd_controlnet import SDControlNet
+from .sd_controlnet import SDControlNet
 from .sd_lora import SDLoRA
+from .sd_motion import SDMotionModel
 from .sd_motion import SDMotionModel
 from .sd_text_encoder import SDTextEncoder
 from .sd_unet import SDUNet
@@ -13,12 +16,10 @@ from .sdxl_text_encoder import SDXLTextEncoder, SDXLTextEncoder2
 from .sdxl_unet import SDXLUNet
 from .sdxl_vae_decoder import SDXLVAEDecoder
 from .sdxl_vae_encoder import SDXLVAEEncoder
-
-from .sd_controlnet import SDControlNet
-
-from .sd_motion import SDMotionModel
-
 from .svd_image_encoder import SVDImageEncoder
+from .svd_unet import SVDUNet
+from .svd_vae_decoder import SVDVAEDecoder
+from .svd_vae_encoder import SVDVAEEncoder
 
 
 class ModelManager:
