@@ -38,6 +38,8 @@ def lets_dance_with_long_video(
     num_frames = sample.shape[0]
     hidden_states_output = [(torch.zeros(sample[0].shape, dtype=sample[0].dtype), 0) for i in range(num_frames)]
 
+    controlnet_hold_cache = {}
+
     for batch_id in tqdm(range(0, num_frames, animatediff_stride), leave=False, desc=f'dance_batch'):
         batch_id_ = min(batch_id + animatediff_batch_size, num_frames)
 
@@ -49,7 +51,18 @@ def lets_dance_with_long_video(
             controlnet_file_contents = []
             for i in range(batch_id, batch_id_):
                 cache_path = controlnet_cache_dir + f'/cache_p{processor_id}_{i}.pt'
-                load_data = torch.load(cache_path)[0]
+                if cache_path in controlnet_hold_cache:
+                    load_data = controlnet_hold_cache[cache_path]
+                    # print(f'命中缓存{cache_path}')
+                else:
+                    load_data = torch.load(cache_path)[0]
+                    controlnet_hold_cache[cache_path] = load_data
+                    # print(f'加载缓存{cache_path}')
+                    if len(controlnet_hold_cache) > animatediff_batch_size * 2:
+                        cache_key = next(iter(controlnet_hold_cache))
+                        if cache_key is not cache_path:
+                            controlnet_hold_cache.pop(cache_key)
+                            # print(f'释放缓存{cache_key}')
                 controlnet_file_contents.append(load_data)
             process_caches.append(torch.stack(controlnet_file_contents, dim=0))
 
