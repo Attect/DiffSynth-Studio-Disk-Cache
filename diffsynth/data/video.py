@@ -3,7 +3,7 @@ import shutil
 
 import imageio
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageOps
 from tqdm import tqdm
 
 
@@ -81,6 +81,42 @@ def crop_and_resize(image, height, width):
     return image
 
 
+def resize_and_fill(image, height, width):
+    # 首先，保持比例缩放图像
+    image.thumbnail((width, height), Image.BICUBIC)
+
+    # 获取缩放后的图像尺寸
+    image_width, image_height = image.size
+
+    # 如果宽度小于目标宽度，则在左右边缘填充像素
+    if image_width < width:
+        left_pad = image.crop((0, 0, 1, image_height))
+        right_pad = image.crop((image_width - 1, 0, image_width, image_height))
+        left_padding = (width - image_width) // 2
+        for i in range(left_padding):
+            image = ImageOps.expand(image, (1, 0, 1, 0))
+            image.paste(left_pad, (0, 0))
+            image.paste(right_pad, (image_width - 1, 0))
+            image_width = image_width + 2
+        if image_width % 2 != 0:
+            image = ImageOps.expand(image, (0, 0, 1, 0))
+            image.paste(right_pad, (image_width, 0))
+
+    # 如果高度小于目标高度，则在上下边缘填充像素
+    if image_height < height:
+        top_pad = image.crop((0, 0, image_width, 1))
+        bottom_pad = image.crop((0, image_height - 1, image_width, image_height))
+        top_padding = (height - image_height) // 2
+        for i in range(top_padding):
+            image = ImageOps.expand(image, (0, 1, 0, 1))
+            image.paste(top_pad, (0, 0))
+            image.paste(bottom_pad, (0, image_height - 1))
+            image_height = image_height + 2
+        if image_height % 2 != 0:
+            image = ImageOps.expand(image, (0, 0, 0, 1))
+            image.paste(bottom_pad, (0, image_height))
+    return image
+
 class VideoData:
     def __init__(self, video_file=None, image_folder=None, image_cache_folder="image_cache", height=None, width=None, **kwargs):
         self.cache_folder = image_cache_folder
@@ -131,7 +167,7 @@ class VideoData:
         width, height = frame.size
         if self.height is not None and self.width is not None:
             if self.height != height or self.width != width:
-                frame = crop_and_resize(frame, self.height, self.width)
+                frame = resize_and_fill(frame, self.height, self.width)
         frame.save(path)
         return path
 

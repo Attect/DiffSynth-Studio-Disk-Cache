@@ -1,20 +1,18 @@
-import torch, os
+import os
+import torch
 from safetensors import safe_open
 
+from .sd_controlnet import SDControlNet
+from .sd_lora import SDLoRA
+from .sd_motion import SDMotionModel
 from .sd_text_encoder import SDTextEncoder
 from .sd_unet import SDUNet
-from .sd_vae_encoder import SDVAEEncoder
 from .sd_vae_decoder import SDVAEDecoder
-from .sd_lora import SDLoRA
-
+from .sd_vae_encoder import SDVAEEncoder
 from .sdxl_text_encoder import SDXLTextEncoder, SDXLTextEncoder2
 from .sdxl_unet import SDXLUNet
 from .sdxl_vae_decoder import SDXLVAEDecoder
 from .sdxl_vae_encoder import SDXLVAEEncoder
-
-from .sd_controlnet import SDControlNet
-
-from .sd_motion import SDMotionModel
 
 
 class ModelManager:
@@ -84,7 +82,11 @@ class ModelManager:
             else:
                 self.model[component] = component_dict[component]()
                 self.model[component].load_state_dict(self.model[component].state_dict_converter().from_civitai(state_dict))
-                self.model[component].to(self.torch_dtype).to(self.device)
+                if component == "vae_decoder":
+                    self.model[component].to(torch.float32).to(self.device)
+                else:
+                    self.model[component].to(self.torch_dtype).to(self.device)
+
             self.model_path[component] = file_path
 
     def load_stable_diffusion_xl(self, state_dict, components=None, file_path=""):

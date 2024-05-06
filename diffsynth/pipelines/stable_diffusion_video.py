@@ -1,6 +1,7 @@
 import json
 import os
 import shutil
+import time
 from typing import List
 
 import numpy as np
@@ -25,7 +26,6 @@ def lets_dance_with_long_video(
         timestep=None,
         encoder_hidden_states=None,
         controlnet_processor_count=2,
-        controlnet_frames=None,
         animatediff_batch_size=16,
         animatediff_stride=8,
         unet_batch_size=1,
@@ -56,7 +56,6 @@ def lets_dance_with_long_video(
         if controlnet_processor_count > 0:
             stack_controlnet_file_contents.append(torch.stack(process_caches, dim=0))
             controlnet_cache_frames = torch.cat(stack_controlnet_file_contents, dim=0)
-
 
         # process this batch
         hidden_states_batch = lets_dance(
@@ -144,10 +143,10 @@ class SDVideoPipeline(torch.nn.Module):
         return image
 
     def decode_image(self, latent, tiled=False, tile_size=64, tile_stride=32):
-        image = self.vae_decoder(latent.to(self.device), tiled=tiled, tile_size=tile_size, tile_stride=tile_stride)[0]
+        image = self.vae_decoder(latent.to(torch.float32).to(self.device), tiled=tiled, tile_size=tile_size, tile_stride=tile_stride)[0]
         image = image.cpu().permute(1, 2, 0).numpy()
-        if not np.isfinite(image).all():
-            return None
+        # if not np.isfinite(image).all():
+        #     return None
         image = Image.fromarray(((image / 2 + 0.5).clip(0, 1) * 255).astype("uint8"))
         return image
 
@@ -156,12 +155,21 @@ class SDVideoPipeline(torch.nn.Module):
         os.makedirs(cache_dir, exist_ok=True)
 
         result = []
-        for frame_id in range(latents.shape[0]):
+        for frame_id in tqdm(range(latents.shape[0]), desc="VAE Decode"):
             save_path = os.path.join(cache_dir, f'image_{frame_id}.png')
             image = self.decode_image(latents[frame_id: frame_id + 1], tiled=tiled, tile_size=tile_size, tile_stride=tile_stride)
+            if image is None:
+                print(f"latent failed at {frame_id} , try smaller tile_size")
+                tile_size = 32
+                image = self.decode_image(latents[frame_id: frame_id + 1], tiled=tiled, tile_size=tile_size, tile_stride=tile_stride)
             if image is not None:
                 image.save(save_path)
                 result.append(save_path)
+            else:
+                print(f"latent failed at {frame_id} , all try failed, saved latents.pt")
+                latent_path = cache_dir + "/latents.pt"
+                torch.save(latents, latent_path)
+                break
         return result
         # images = [
         #     self.decode_image(latents[frame_id: frame_id + 1], tiled=tiled, tile_size=tile_size,
@@ -265,15 +273,28 @@ class SDVideoPipeline(torch.nn.Module):
                 # ], dim=1)
 
         # Denoise
+        save_process_id_path = output_folder + "/last_process_id.txt"
+        saved_process_id = -1
+        if os.path.exists(save_process_id_path):
+            with open(save_process_id_path) as f:
+                saved_process_id = int(f.read())
+
+        cache_latents_path = output_folder + '/latents.py'
+        if saved_process_id > -1 and os.path.exists(cache_latents_path):
+            latents = torch.load(cache_latents_path)
+
         for progress_id, timestep in enumerate(progress_bar_cmd(self.scheduler.timesteps)):
             timestep = torch.IntTensor((timestep,))[0].to(self.device)
+            if saved_process_id > -1 and progress_id <= saved_process_id:
+                print(f'\n根据保存进度{saved_process_id}，跳过{progress_id}')
+                time.sleep(1)
+                continue
 
             # Classifier-free guidance
             noise_pred_posi = lets_dance_with_long_video(
                 self.unet, motion_modules=self.motion_modules, controlnet=self.controlnet,
                 sample=latents, timestep=timestep, encoder_hidden_states=prompt_emb_posi,
                 controlnet_processor_count=controlnet_processor_count,
-                controlnet_frames=controlnet_frames,
                 animatediff_batch_size=animatediff_batch_size, animatediff_stride=animatediff_stride,
                 unet_batch_size=unet_batch_size, controlnet_batch_size=controlnet_batch_size,
                 cross_frame_attention=cross_frame_attention,
@@ -284,7 +305,6 @@ class SDVideoPipeline(torch.nn.Module):
                 self.unet, motion_modules=self.motion_modules, controlnet=self.controlnet,
                 sample=latents, timestep=timestep, encoder_hidden_states=prompt_emb_nega,
                 controlnet_processor_count=controlnet_processor_count,
-                controlnet_frames=controlnet_frames,
                 animatediff_batch_size=animatediff_batch_size, animatediff_stride=animatediff_stride,
                 unet_batch_size=unet_batch_size, controlnet_batch_size=controlnet_batch_size,
                 cross_frame_attention=cross_frame_attention,
@@ -301,6 +321,10 @@ class SDVideoPipeline(torch.nn.Module):
                 target_latents = self.encode_images(rendered_frames)
                 noise_pred = self.scheduler.return_to_timestep(timestep, latents, target_latents)
             latents = self.scheduler.step(noise_pred, timestep, latents)
+
+            with open(save_process_id_path, 'w') as f:
+                f.write(str(progress_id))
+            torch.save(latents, cache_latents_path)
 
             # UI
             if progress_bar_st is not None:
@@ -361,7 +385,7 @@ class SDVideoPipelineRunner:
             start_frame_id = 0
         if end_frame_id is None:
             end_frame_id = len(video)
-        frames = [video[i] for i in range(start_frame_id, end_frame_id)]
+        frames = [video[i] for i in tqdm(range(start_frame_id, end_frame_id), desc="Decode Images")]
         return frames
 
     def add_data_to_pipeline_inputs(self, data, pipeline_inputs):

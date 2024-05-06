@@ -6,8 +6,12 @@
 
 ## DiffSynth Studio 磁盘缓存版特别说明
 
-此版本为个人所需[Issues 22](https://github.com/Artiprocher/DiffSynth-Studio/issues/22)，根据原项目[DiffSynth-Studio](https://github.com/Artiprocher/DiffSynth-Studio)
+**此版本为个人所需[Issues 22](https://github.com/Artiprocher/DiffSynth-Studio/issues/22)**，根据原项目[DiffSynth-Studio](https://github.com/Artiprocher/DiffSynth-Studio)
 ，将运行过程中部分内存数据转移至磁盘，以节省内存需求（128GiB跑不动2分钟一镜到底的视频太离谱了）。
+
+**此版本增加了自动继续上次进度的功能**，应对跑了几天却因为一些情况意外中断导致计算浪费的情况。
+
+**此版本使用32位精度处理VAE解码**，以处理一些模型丢失部分帧的问题。
 
 *注意：python菜鸟，修改此项目前不会python语言，粗暴糊了一坨磁盘缓存代码上去，且没有缓存管理和缓存加速机制（目前懒得设计，改现在的效果已经花了太多时间了），代码洁癖者慎看，并且完全不了解AI相关开发及运行原理，仅根据其它语言开发经验修改。已尽可能保证examples都可跑*
 ，有错可以提issuse。
@@ -17,6 +21,10 @@
 使用`examples/diffutoon_toon_shading.py`修改参数，增加smoother，一次性处理3667帧，生成分辨率1280x768。
 全流程内存使用：小于6GiB！！
 磁盘储存使用：260GiB (可以理解为如果不增加这个磁盘缓存效果将需要260GiB的内存？或许没那么多但肯定也少不了)
+
+### 自动继续上次进度
+
+只能继承大进度，整体项目划分为10个步骤的精度。进度储存在输出目录的`latents.py`中，记录在输出目录的`last_process_id.txt`中，如果只想使用图像和controlnet的缓存重新跑，删除输出目录的这两个文件即可。
 
 ### 输出目录说明
 
