@@ -16,6 +16,12 @@ from .sdxl_text_encoder import SDXLTextEncoder, SDXLTextEncoder2
 from .sdxl_unet import SDXLUNet
 from .sdxl_vae_decoder import SDXLVAEDecoder
 from .sdxl_vae_encoder import SDXLVAEEncoder
+
+from .sd_controlnet import SDControlNet
+
+from .sd_motion import SDMotionModel
+from .sdxl_motion import SDXLMotionModel
+
 from .svd_image_encoder import SVDImageEncoder
 from .svd_unet import SVDUNet
 from .svd_vae_decoder import SVDVAEDecoder
@@ -60,7 +66,11 @@ class ModelManager:
     def is_animatediff(self, state_dict):
         param_name = "mid_block.motion_modules.0.temporal_transformer.proj_out.weight"
         return param_name in state_dict
-    
+
+    def is_animatediff_xl(self, state_dict):
+        param_name = "up_blocks.2.motion_modules.2.temporal_transformer.transformer_blocks.0.ff_norm.weight"
+        return param_name in state_dict
+
     def is_sd_lora(self, state_dict):
         param_name = "lora_unet_up_blocks_3_attentions_2_transformer_blocks_0_ff_net_2.lora_up.weight"
         return param_name in state_dict
@@ -157,6 +167,14 @@ class ModelManager:
         self.model[component] = model
         self.model_path[component] = file_path
 
+    def load_animatediff_xl(self, state_dict, file_path=""):
+        component = "motion_modules_xl"
+        model = SDXLMotionModel()
+        model.load_state_dict(model.state_dict_converter().from_civitai(state_dict))
+        model.to(self.torch_dtype).to(self.device)
+        self.model[component] = model
+        self.model_path[component] = file_path
+
     def load_beautiful_prompt(self, state_dict, file_path=""):
         component = "beautiful_prompt"
         from transformers import AutoModelForCausalLM
@@ -222,6 +240,8 @@ class ModelManager:
             self.load_stable_video_diffusion(state_dict, file_path=file_path)
         elif self.is_animatediff(state_dict):
             self.load_animatediff(state_dict, file_path=file_path)
+        elif self.is_animatediff_xl(state_dict):
+            self.load_animatediff_xl(state_dict, file_path=file_path)
         elif self.is_controlnet(state_dict):
             self.load_controlnet(state_dict, file_path=file_path)
         elif self.is_stabe_diffusion_xl(state_dict):

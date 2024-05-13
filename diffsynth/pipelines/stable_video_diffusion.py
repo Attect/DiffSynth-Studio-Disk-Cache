@@ -1,6 +1,5 @@
 from ..models import ModelManager, SVDImageEncoder, SVDUNet, SVDVAEEncoder, SVDVAEDecoder
 from ..schedulers import ContinuousODEScheduler
-from ..data import save_video
 import torch
 from tqdm import tqdm
 from PIL import Image
@@ -93,16 +92,14 @@ class SVDVideoPipeline(torch.nn.Module):
         image_emb_vae_posi, image_emb_clip_posi,
         image_emb_vae_nega, image_emb_clip_nega
     ):
-        latents_input = self.scheduler.scale_model_input(latents, timestep)
-
         # Positive side
         noise_pred_posi = self.unet(
-            torch.cat([latents_input, image_emb_vae_posi], dim=1),
+            torch.cat([latents, image_emb_vae_posi], dim=1),
             timestep, image_emb_clip_posi, add_time_id
         )
         # Negative side
         noise_pred_nega = self.unet(
-            torch.cat([latents_input, image_emb_vae_nega], dim=1),
+            torch.cat([latents, image_emb_vae_nega], dim=1),
             timestep, image_emb_clip_nega, add_time_id
         )
 
@@ -117,6 +114,8 @@ class SVDVideoPipeline(torch.nn.Module):
         self,
         input_image=None,
         input_video=None,
+        mask_frames=[],
+        mask_frame_ids=[],
         min_cfg_scale=1.0,
         max_cfg_scale=3.0,
         denoising_strength=1.0,
@@ -136,10 +135,14 @@ class SVDVideoPipeline(torch.nn.Module):
         # Prepare latent tensors
         noise = torch.randn((num_frames, 4, height//8, width//8), device="cpu", dtype=self.torch_dtype).to(self.device)
         if denoising_strength == 1.0:
-            latents = noise * self.scheduler.init_noise_sigma
+            latents = noise.clone()
         else:
             latents = self.encode_video_with_vae(input_video)
             latents = self.scheduler.add_noise(latents, noise, self.scheduler.timesteps[0])
+
+        # Prepare mask frames
+        if len(mask_frames) > 0:
+            mask_latents = self.encode_video_with_vae(mask_frames)
 
         # Encode image
         image_emb_clip_posi = self.encode_image_with_clip(input_image)
@@ -156,6 +159,10 @@ class SVDVideoPipeline(torch.nn.Module):
 
         # Denoise
         for progress_id, timestep in enumerate(progress_bar_cmd(self.scheduler.timesteps)):
+
+            # Mask frames
+            for frame_id, mask_frame_id in enumerate(mask_frame_ids):
+                latents[mask_frame_id] = self.scheduler.add_noise(mask_latents[frame_id], noise[mask_frame_id], timestep)
 
             # Fetch model output
             noise_pred = self.calculate_noise_pred(
